@@ -113,7 +113,7 @@ def main():
     for epoch in range(start_epoch, args.max_epoch):
         idxs = np.arange(len(train_keys))
         np.random.shuffle(idxs) # shuffle indices
-
+        model.train()
         for idx in idxs:
             key = train_keys[idx]
             seq = dataset[key]['features'][...] # sequence of features, (seq_len, dim)
@@ -138,7 +138,12 @@ def main():
             optimizer.step()
             baselines[key] = 0.9 * baselines[key] + 0.1 * np.mean(epis_rewards) # update baseline reward via moving average
             reward_writers[key].append(np.mean(epis_rewards))
-
+        if epoch % 50 == 0:
+          evaluate(model, dataset, test_keys, use_gpu)
+          model_state_dict = model.module.state_dict() if use_gpu else model.state_dict()
+          model_save_path = osp.join(args.save_dir, 'model_epoch' + str(epoch) + '.pth.tar')
+          save_checkpoint(model_state_dict, model_save_path)
+          print("Model saved to {}".format(model_save_path))
         epoch_reward = np.mean([reward_writers[key][epoch] for key in train_keys])
         print("epoch {}/{}\t reward {}\t".format(epoch+1, args.max_epoch, epoch_reward))
 
@@ -191,7 +196,6 @@ def evaluate(model, dataset, test_keys, use_gpu):
             if args.save_results:
                 h5_res.create_dataset(key + '/score', data=probs)
                 h5_res.create_dataset(key + '/machine_summary', data=machine_summary)
-                h5_res.create_dataset(key + '/gtscore', data=dataset[key]['gtscore'][...])
                 h5_res.create_dataset(key + '/fm', data=fm)
 
     if args.verbose:
